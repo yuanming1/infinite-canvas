@@ -80,6 +80,13 @@ export function getCanvasVideoTask(taskID: string, model: string) {
     return request<CanvasVideoTask>(`/canvas/generations/videos/${encodeURIComponent(taskID)}?model=${encodeURIComponent(model)}`);
 }
 
+export type CanvasAvailableModel = { id: string };
+
+// listCanvasModels 按用途从短剧后端拉可用模型列表（集成模式下画布不存密钥，模型元数据统一由后端 llm_configs 提供）。
+export function listCanvasModels(purpose: "image" | "video" | "chat") {
+    return request<CanvasAvailableModel[]>(`/llm-configs/${purpose}/models`, { method: "POST", body: "{}" });
+}
+
 export function fromRemoteCanvasProject(project: RemoteCanvasProject): CanvasProject {
     const content = project.content && typeof project.content === "object" ? project.content : {};
     return {

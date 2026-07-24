@@ -6,13 +6,13 @@ import {
     deleteRemoteCanvasProject,
     fromRemoteCanvasProject,
     getRemoteCanvasSettings,
-    listCanvasModels,
     listRemoteCanvasProjects,
     updateRemoteCanvasProject,
     updateRemoteCanvasSettings,
 } from "@/services/short-drama-canvas";
 import { useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
-import { encodeChannelModel, useConfigStore, type AiConfig, type ChannelModel, type ModelChannel } from "@/stores/use-config-store";
+import { useConfigStore, type AiConfig } from "@/stores/use-config-store";
+import { ensureShortDramaChannel } from "@/components/layout/canvas-short-drama-models";
 
 const preferenceKeys = ["quality", "size", "background", "count", "canvasImageCount", "videoSeconds", "vquality", "videoGenerateAudio", "videoWatermark", "audioVoice", "audioFormat", "audioSpeed", "audioInstructions"] as const;
 type PreferenceKey = (typeof preferenceKeys)[number];
@@ -149,50 +149,11 @@ function canvasProjectFingerprint(project: CanvasProject) {
     return JSON.stringify(project);
 }
 
-const SHORT_DRAMA_CHANNEL_ID = "short-drama";
-
-// useCanvasModelSync 集成模式启动时按用途从短剧后端拉可用模型，构造一个虚拟渠道替换本地 channels，
-// 并在用户未选模型时填默认值。画布不存密钥，模型元数据统一由后端 llm_configs 提供。
+// useCanvasModelSync 集成模式启动时重置为单一短剧虚拟渠道；模型列表不再启动预拉，
+// 改由 ModelPicker 在用户打开对应工作台的模型选择器时按 capability 懒加载（见 canvas-short-drama-models.ts）。
 function useCanvasModelSync() {
     useEffect(() => {
         if (!isShortDramaIntegration) return;
-        let active = true;
-        void Promise.all([
-            listCanvasModels("image").catch(() => []),
-            listCanvasModels("video").catch(() => []),
-            listCanvasModels("chat").catch(() => []),
-        ]).then(([imageModels, videoModels, chatModels]) => {
-            if (!active) return;
-            applyShortDramaChannels(imageModels, videoModels, chatModels);
-        });
-        return () => {
-            active = false;
-        };
+        ensureShortDramaChannel();
     }, []);
-}
-
-function applyShortDramaChannels(imageModels: { id: string }[], videoModels: { id: string }[], chatModels: { id: string }[]) {
-    const models: ChannelModel[] = [
-        ...imageModels.map((model) => ({ name: model.id, capability: "image" as const })),
-        ...videoModels.map((model) => ({ name: model.id, capability: "video" as const })),
-        ...chatModels.map((model) => ({ name: model.id, capability: "text" as const })),
-    ];
-    const encode = (model: { id: string } | undefined) => (model ? encodeChannelModel(SHORT_DRAMA_CHANNEL_ID, model.id) : "");
-    const channel: ModelChannel = {
-        id: SHORT_DRAMA_CHANNEL_ID,
-        name: "短剧",
-        baseUrl: "https://short-drama-proxy",
-        apiKey: "integrated",
-        apiFormat: "openai",
-        models,
-    };
-    useConfigStore.setState((state) => {
-        const config = state.config;
-        const next: AiConfig = { ...config, channels: [channel] };
-        if (!config.imageModel?.trim() && imageModels[0]) next.imageModel = encode(imageModels[0]);
-        if (!config.videoModel?.trim() && videoModels[0]) next.videoModel = encode(videoModels[0]);
-        if (!config.textModel?.trim() && chatModels[0]) next.textModel = encode(chatModels[0]);
-        if (!config.model?.trim()) next.model = encode(imageModels[0]) || encode(chatModels[0]);
-        return { config: next };
-    });
 }

@@ -2,7 +2,9 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { Cpu } from "lucide-react";
 
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
+import { ensureShortDramaModels } from "@/components/layout/canvas-short-drama-models";
 import { cn } from "@/lib/utils";
+import { isShortDramaIntegration } from "@/lib/short-drama-auth";
 import { modelOptionLabel, modelOptionName, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 
 type ModelPickerProps = {
@@ -19,6 +21,7 @@ type ModelPickerProps = {
 export function ModelPicker({ config, value, onChange, capability, className, fullWidth = false, placeholder = "选择模型", onMissingConfig }: ModelPickerProps) {
     const pickerId = useId();
     const [open, setOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
     const options = useMemo(() => Array.from(new Set([...(config.channelMode === "local" && !capability ? [value] : []), ...selectableModelsByCapability(config, capability)].filter((model): model is string => Boolean(model)))), [capability, config, value]);
     const current = value || "";
 
@@ -35,8 +38,15 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
             open={open}
             value={current}
             onOpenChange={(nextOpen) => {
-                if (nextOpen && !options.length && config.channelMode === "local") onMissingConfig?.();
-                if (nextOpen) window.dispatchEvent(new CustomEvent("model-picker-open", { detail: pickerId }));
+                if (nextOpen) {
+                    if (isShortDramaIntegration && capability) {
+                        setLoading(true);
+                        void ensureShortDramaModels(capability).finally(() => setLoading(false));
+                    } else if (!options.length && config.channelMode === "local") {
+                        onMissingConfig?.();
+                    }
+                    window.dispatchEvent(new CustomEvent("model-picker-open", { detail: pickerId }));
+                }
                 setOpen(nextOpen);
             }}
             onValueChange={onChange}
@@ -73,7 +83,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                     ))
                 ) : (
                     <SelectItem value="__empty__" disabled>
-                        {emptyModelLabel(config, capability)}
+                        {loading ? "加载中…" : emptyModelLabel(config, capability)}
                     </SelectItem>
                 )}
             </SelectContent>

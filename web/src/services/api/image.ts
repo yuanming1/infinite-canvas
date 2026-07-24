@@ -6,7 +6,7 @@ import { nanoid } from "nanoid";
 import { dataUrlToFile } from "@/lib/image-utils";
 import { buildImageReferencePromptText } from "@/lib/image-reference-prompt";
 import { imageToDataUrl } from "@/services/image-storage";
-import { completeCanvasChat, generateCanvasImages } from "@/services/short-drama-canvas";
+import { completeCanvasChat, editCanvasImage, generateCanvasImages } from "@/services/short-drama-canvas";
 import { isShortDramaIntegration } from "@/lib/short-drama-auth";
 import type { ReferenceImage } from "@/types/image";
 
@@ -731,7 +731,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     if (isShortDramaIntegration) {
         const images = await Promise.all(references.map(async (image) => ({ ...image, dataUrl: await imageToDataUrl(image) })));
         if (mask) images.push({ ...mask, dataUrl: await imageToDataUrl(mask) });
-        const result = await generateCanvasImages({ prompt: withSystemPrompt(requestConfig, requestPrompt), model: requestConfig.model, count: n, size: config.size, quality: config.quality, references: images });
+        const result = await editCanvasImage({ prompt: withSystemPrompt(requestConfig, requestPrompt), model: requestConfig.model, count: n, size: config.size, quality: config.quality, references: images });
         return result.map((image) => ({ id: nanoid(), dataUrl: canvasImageDataUrl(image) }));
     }
     if (script) {

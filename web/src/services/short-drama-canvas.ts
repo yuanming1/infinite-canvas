@@ -62,6 +62,10 @@ export function generateCanvasImages(input: { prompt: string; model: string; cou
     return request<CanvasGeneratedImage[]>("/canvas/generations/images", { method: "POST", body: JSON.stringify(input) });
 }
 
+export function editCanvasImage(input: { prompt: string; model: string; count: number; size: string; quality: string; references: unknown[] }) {
+    return request<CanvasGeneratedImage[]>("/canvas/generations/images/edit", { method: "POST", body: JSON.stringify(input) });
+}
+
 export function completeCanvasChat(input: { model: string; messages: Array<{ role: string; content: string }> }) {
     return request<{ content: string }>("/canvas/generations/chat", { method: "POST", body: JSON.stringify(input) });
 }

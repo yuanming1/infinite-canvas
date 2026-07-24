@@ -10,7 +10,7 @@ import {
     updateRemoteCanvasProject,
     updateRemoteCanvasSettings,
 } from "@/services/short-drama-canvas";
-import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
+import { useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { useConfigStore, type AiConfig } from "@/stores/use-config-store";
 
 const preferenceKeys = ["quality", "size", "background", "count", "canvasImageCount", "videoSeconds", "vquality", "videoGenerateAudio", "videoWatermark", "audioVoice", "audioFormat", "audioSpeed", "audioInstructions"] as const;
@@ -30,6 +30,7 @@ function useCanvasProjectSync() {
         let syncing = false;
         let timer: ReturnType<typeof window.setTimeout> | undefined;
         const versions = new Map<string, number>();
+		const fingerprints = new Map<string, string>();
 
         const sync = async () => {
             if (!ready || syncing) return;
@@ -39,13 +40,17 @@ function useCanvasProjectSync() {
                 const currentIDs = new Set(projects.map((project) => project.id));
                 for (const project of projects) {
                     const version = versions.get(project.id);
+                    const fingerprint = canvasProjectFingerprint(project);
+                    if (version !== undefined && fingerprints.get(project.id) === fingerprint) continue;
                     const remote = version === undefined ? await createRemoteCanvasProject(project) : await updateRemoteCanvasProject(project, version);
                     versions.set(remote.id, remote.version);
+                    fingerprints.set(project.id, fingerprint);
                 }
                 for (const id of Array.from(versions.keys())) {
                     if (currentIDs.has(id)) continue;
                     await deleteRemoteCanvasProject(id);
                     versions.delete(id);
+                    fingerprints.delete(id);
                 }
             } catch {
                 // Keep the local draft. A later edit retries synchronization.
@@ -63,7 +68,10 @@ function useCanvasProjectSync() {
         void listRemoteCanvasProjects()
             .then((remoteProjects) => {
                 if (!active) return;
-                remoteProjects.forEach((project) => versions.set(project.id, project.version));
+                remoteProjects.forEach((project) => {
+                    versions.set(project.id, project.version);
+                    fingerprints.set(project.id, canvasProjectFingerprint(fromRemoteCanvasProject(project)));
+                });
                 const localProjects = useCanvasStore.getState().projects;
                 const localIDs = new Set(localProjects.map((project) => project.id));
                 const missingRemoteProjects = remoteProjects.filter((project) => !localIDs.has(project.id)).map(fromRemoteCanvasProject);
@@ -133,4 +141,8 @@ function useCanvasPreferenceSync() {
 
 function canvasPreferences(config: AiConfig): Record<PreferenceKey, string> {
     return Object.fromEntries(preferenceKeys.map((key) => [key, config[key]])) as Record<PreferenceKey, string>;
+}
+
+function canvasProjectFingerprint(project: CanvasProject) {
+    return JSON.stringify(project);
 }

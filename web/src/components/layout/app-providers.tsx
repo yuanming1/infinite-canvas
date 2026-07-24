@@ -6,6 +6,7 @@ import { App, ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
 
 import { ClientRootInit } from "@/components/layout/client-root-init";
+import { CanvasShortDramaSync } from "@/components/layout/canvas-short-drama-sync";
 import { ShortDramaAuthGate } from "@/components/layout/short-drama-auth-gate";
 import { getAntThemeConfig } from "@/lib/app-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -34,9 +35,11 @@ export function AppProviders({ children }: { children: ReactNode }) {
             <ProConfigProvider dark={dark}>
                 <App>
                     <ShortDramaAuthGate>
-                        <QueryClientProvider client={queryClient}>
-                            <ClientRootInit>{children}</ClientRootInit>
-                        </QueryClientProvider>
+                        <CanvasShortDramaSync>
+                            <QueryClientProvider client={queryClient}>
+                                <ClientRootInit>{children}</ClientRootInit>
+                            </QueryClientProvider>
+                        </CanvasShortDramaSync>
                     </ShortDramaAuthGate>
                 </App>
             </ProConfigProvider>

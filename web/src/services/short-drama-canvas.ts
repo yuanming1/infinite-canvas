@@ -12,6 +12,9 @@ export type RemoteCanvasProject = {
     updated_at: string;
 };
 
+export type CanvasGeneratedImage = { url: string; b64_json?: string; mime_type?: string };
+export type CanvasVideoTask = { id: string; status: string; video_url?: string; error?: string };
+
 const apiBaseUrl = (import.meta.env.VITE_SHORT_DRAMA_API_BASE_URL || "/api").replace(/\/+$/, "");
 
 async function request<T>(path: string, init?: RequestInit) {
@@ -53,6 +56,28 @@ export function getRemoteCanvasSettings() {
 
 export function updateRemoteCanvasSettings(settings: Record<string, unknown>) {
     return request<{ settings: Record<string, unknown> }>("/canvas/settings", { method: "PUT", body: JSON.stringify({ settings }) });
+}
+
+export function generateCanvasImages(input: { prompt: string; model: string; count: number; size: string; quality: string; references?: unknown[] }) {
+    return request<CanvasGeneratedImage[]>("/canvas/generations/images", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function completeCanvasChat(input: { model: string; messages: Array<{ role: string; content: string }> }) {
+    return request<{ content: string }>("/canvas/generations/chat", { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function generateCanvasAudio(input: { input: string; model: string; options: { voice: string; response_format: string; speed: number } }) {
+    const result = await request<{ data: string; mime_type?: string }>("/canvas/generations/audio", { method: "POST", body: JSON.stringify(input) });
+    const bytes = Uint8Array.from(atob(result.data), (char) => char.charCodeAt(0));
+    return new Blob([bytes], { type: result.mime_type || "audio/mpeg" });
+}
+
+export function createCanvasVideoTask(input: { prompt: string; options: Record<string, unknown> }) {
+    return request<CanvasVideoTask>("/canvas/generations/videos", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function getCanvasVideoTask(taskID: string, model: string) {
+    return request<CanvasVideoTask>(`/canvas/generations/videos/${encodeURIComponent(taskID)}?model=${encodeURIComponent(model)}`);
 }
 
 export function fromRemoteCanvasProject(project: RemoteCanvasProject): CanvasProject {

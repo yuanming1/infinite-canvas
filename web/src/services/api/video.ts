@@ -5,6 +5,8 @@ import { dataUrlToFile } from "@/lib/image-utils";
 import { getMediaBlob, uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { imageToDataUrl } from "@/services/image-storage";
 import { boolConfig, buildSeedancePromptText, isSeedanceVideoConfig, normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution, seedanceVideoReferenceError, SEEDANCE_REFERENCE_LIMITS } from "@/lib/seedance-video";
+import { isShortDramaIntegration } from "@/lib/short-drama-auth";
+import { createCanvasVideoTask, getCanvasVideoTask } from "@/services/short-drama-canvas";
 import { buildApiUrl, modelOptionName, resolveModelRequestConfig, resolveModelScript, type AiConfig } from "@/stores/use-config-store";
 import { runModelPlugin } from "./model-plugin";
 import type { ReferenceImage } from "@/types/image";
@@ -25,7 +27,7 @@ type ApiEnvelope<T> = T | { code?: number | string; data?: T | null; msg?: strin
 type RequestOptions = { signal?: AbortSignal };
 
 export type VideoGenerationResult = { blob?: Blob; url?: string; mimeType?: string };
-export type VideoGenerationTask = { id: string; provider: "openai" | "seedance" | "plugin"; model: string };
+export type VideoGenerationTask = { id: string; provider: "openai" | "seedance" | "plugin" | "short-drama"; model: string };
 export type VideoGenerationTaskState = { status: "pending" } | { status: "completed"; result: VideoGenerationResult } | { status: "failed"; error: string };
 
 /** Results for scripted (plugin) video models, which run their own create+poll in one shot at task creation. */
@@ -59,6 +61,7 @@ export async function requestVideoGeneration(config: AiConfig, prompt: string, r
 export async function createVideoGenerationTask(config: AiConfig, prompt: string, references: ReferenceImage[] = [], videoReferences: ReferenceVideo[] = [], audioReferences: ReferenceAudio[] = [], options?: RequestOptions): Promise<VideoGenerationTask> {
     const selectedModel = (config.model || config.videoModel).trim();
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
+    if (isShortDramaIntegration) return createShortDramaVideoTask(requestConfig, prompt, references, videoReferences, audioReferences);
     const script = resolveModelScript(config, selectedModel);
     if (script) return createPluginVideoTask(requestConfig, selectedModel, script, prompt, references, options);
     assertVideoConfig(requestConfig, requestConfig.model);
@@ -76,9 +79,67 @@ export async function pollVideoGenerationTask(config: AiConfig, task: VideoGener
         const result = pluginVideoResults.get(task.id);
         return result ? { status: "completed", result } : { status: "failed", error: "插件视频任务已失效，请重新生成" };
     }
+    if (task.provider === "short-drama") return pollShortDramaVideoTask(task, options);
     const requestConfig = resolveModelRequestConfig(config, task.model);
     assertVideoConfig(requestConfig, requestConfig.model);
     return task.provider === "seedance" ? pollSeedanceTask(requestConfig, task, options) : pollOpenAIVideoTask(requestConfig, task, options);
+}
+
+async function createShortDramaVideoTask(config: AiConfig, prompt: string, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[]): Promise<VideoGenerationTask> {
+    const media = await shortDramaVideoMedia(references, videoReferences, audioReferences);
+    const task = await createCanvasVideoTask({
+        prompt,
+        options: {
+            model: config.model,
+            duration: Number(normalizeVideoSeconds(config.videoSeconds)),
+            durationSeconds: Number(normalizeVideoSeconds(config.videoSeconds)),
+            quality: normalizeVideoResolution(config.vquality),
+            ratio: config.size,
+            generationMode: media.length ? "reference" : "text_only",
+            media,
+            metadata: {
+                generate_audio: boolConfig(config.videoGenerateAudio, true),
+                watermark: boolConfig(config.videoWatermark, false),
+            },
+        },
+    });
+    if (!task.id) throw new Error("短剧后端没有返回视频任务 ID");
+    return { id: task.id, provider: "short-drama", model: config.model };
+}
+
+async function pollShortDramaVideoTask(task: VideoGenerationTask, options?: RequestOptions): Promise<VideoGenerationTaskState> {
+    const state = await getCanvasVideoTask(task.id, task.model);
+    if (state.video_url) return { status: "completed", result: await videoResultFromUrl(state.video_url, options) };
+    const status = state.status.toLowerCase();
+    if (status === "completed" || status === "succeeded") return { status: "failed", error: "视频任务完成但没有返回视频 URL" };
+    if (status === "failed" || status === "cancelled" || status === "expired") return { status: "failed", error: state.error || "视频生成失败" };
+    return { status: "pending" };
+}
+
+async function shortDramaVideoMedia(references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[]) {
+    const images = await Promise.all(references.map(async (image) => ({
+        type: "image_url",
+        role: "reference_image",
+        url: image.url || "",
+        dataUrl: await imageToDataUrl(image),
+        mimeType: image.type,
+        fileName: image.name,
+    })));
+    const videos = await Promise.all(videoReferences.map(async (video) => ({
+        type: "video_url",
+        role: "reference_video",
+        url: await resolveSeedanceVideoUrl(video),
+        mimeType: video.type,
+        fileName: video.name,
+    })));
+    const audios = await Promise.all(audioReferences.map(async (audio) => ({
+        type: "audio_url",
+        role: "reference_audio",
+        url: await resolveSeedanceAudioUrl(audio),
+        mimeType: audio.type,
+        fileName: audio.name,
+    })));
+    return [...images, ...videos, ...audios];
 }
 
 async function createPluginVideoTask(config: AiConfig, model: string, script: string, prompt: string, references: ReferenceImage[], options?: RequestOptions): Promise<VideoGenerationTask> {

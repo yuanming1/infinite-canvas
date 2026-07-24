@@ -6,6 +6,8 @@ import { nanoid } from "nanoid";
 import { dataUrlToFile } from "@/lib/image-utils";
 import { buildImageReferencePromptText } from "@/lib/image-reference-prompt";
 import { imageToDataUrl } from "@/services/image-storage";
+import { completeCanvasChat, generateCanvasImages } from "@/services/short-drama-canvas";
+import { isShortDramaIntegration } from "@/lib/short-drama-auth";
 import type { ReferenceImage } from "@/types/image";
 
 export type AiTextMessage = {
@@ -663,6 +665,10 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
     const requestConfig = resolveModelRequestConfig(config, config.model || config.imageModel);
     const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const script = resolveModelScript(config, config.model || config.imageModel);
+    if (isShortDramaIntegration) {
+        const images = await generateCanvasImages({ prompt: withSystemPrompt(requestConfig, prompt), model: requestConfig.model, count: n, size: config.size, quality: config.quality });
+        return images.map((image) => ({ id: nanoid(), dataUrl: canvasImageDataUrl(image) }));
+    }
     if (script) {
         const quality = normalizeQuality(config.quality);
         const requestSize = resolveRequestSize(quality, config.size);
@@ -722,6 +728,12 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const requestPrompt = buildImageReferencePromptText(prompt, references);
     const script = resolveModelScript(config, config.model || config.imageModel);
+    if (isShortDramaIntegration) {
+        const images = await Promise.all(references.map(async (image) => ({ ...image, dataUrl: await imageToDataUrl(image) })));
+        if (mask) images.push({ ...mask, dataUrl: await imageToDataUrl(mask) });
+        const result = await generateCanvasImages({ prompt: withSystemPrompt(requestConfig, requestPrompt), model: requestConfig.model, count: n, size: config.size, quality: config.quality, references: images });
+        return result.map((image) => ({ id: nanoid(), dataUrl: canvasImageDataUrl(image) }));
+    }
     if (script) {
         const quality = normalizeQuality(config.quality);
         const requestSize = resolveRequestSize(quality, config.size);
@@ -784,6 +796,12 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
 export async function requestImageQuestion(config: AiConfig, messages: AiTextMessage[], onDelta: (text: string) => void, options?: RequestOptions) {
     const requestConfig = resolveModelRequestConfig(config, config.model || config.textModel);
     const script = resolveModelScript(config, config.model || config.textModel);
+    if (isShortDramaIntegration) {
+        const result = await completeCanvasChat({ model: requestConfig.model, messages: messages.map(canvasChatMessage) });
+        const content = result.content.trim() || "没有返回内容";
+        onDelta(content);
+        return content;
+    }
     if (script) {
         try {
             const answer = await runModelPlugin<string>({
@@ -853,3 +871,16 @@ const defaultGeminiConfig: Pick<AiConfig, "baseUrl" | "apiKey" | "apiFormat" | "
     model: "",
     systemPrompt: "",
 };
+
+function canvasImageDataUrl(image: { url: string; b64_json?: string; mime_type?: string }) {
+    if (image.b64_json) return `data:${image.mime_type || "image/png"};base64,${image.b64_json}`;
+    if (image.url) return image.url;
+    throw new Error("短剧后端没有返回图片");
+}
+
+function canvasChatMessage(message: AiTextMessage) {
+    const content = Array.isArray(message.content)
+        ? message.content.map((item) => (item.type === "text" ? item.text : `[图片] ${item.image_url.url}`)).join("\n")
+        : message.content;
+    return { role: message.role, content };
+}

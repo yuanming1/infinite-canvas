@@ -2,7 +2,6 @@ import localforage from "localforage";
 
 import { runPromptSource, type RawPrompt } from "./prompt-source-runtime";
 import { usePromptSourceStore } from "@/stores/use-prompt-source-store";
-import { usePromptStore, type PersonalPrompt } from "@/stores/use-prompt-store";
 import type { PromptSource } from "./prompt-source-presets";
 
 export type Prompt = RawPrompt & {
@@ -12,7 +11,6 @@ export type Prompt = RawPrompt & {
 };
 
 export const ALL_PROMPTS_OPTION = "全部";
-export const PERSONAL_PROMPTS_CATEGORY = "我的提示词";
 
 export type PromptListResponse = {
     items: Prompt[];
@@ -76,17 +74,6 @@ function withSourceMeta(source: PromptSource, items: RawPrompt[]): Prompt[] {
     }));
 }
 
-export function personalPromptToPrompt(item: PersonalPrompt): Prompt {
-    return {
-        ...item,
-        coverUrl: item.coverUrl || item.referenceImageUrls[0] || "",
-        sourceId: "personal",
-        category: PERSONAL_PROMPTS_CATEGORY,
-        githubUrl: "",
-        preview: "",
-    };
-}
-
 async function readSourceCache(sourceId: string) {
     return promptCacheStore.getItem<SourceCache>(cacheKey(sourceId));
 }
@@ -135,7 +122,7 @@ async function getSourcePrompts(source: PromptSource): Promise<Prompt[]> {
     return (await readSourceCache(source.id))?.items || [];
 }
 
-async function getAllPrompts(includePersonal: boolean): Promise<Prompt[]> {
+async function getAllPrompts(): Promise<Prompt[]> {
     const settled = await Promise.all(
         enabledSources().map(async (source) => {
             try {
@@ -145,19 +132,17 @@ async function getAllPrompts(includePersonal: boolean): Promise<Prompt[]> {
             }
         }),
     );
-    const personal = includePersonal ? usePromptStore.getState().prompts.map(personalPromptToPrompt) : [];
-    return [...personal, ...settled.flat()];
+    return settled.flat();
 }
 
-export async function fetchPrompts({ keyword = "", tag = [], category = ALL_PROMPTS_OPTION, page = 1, pageSize = 20, includePersonal = true }: { keyword?: string; tag?: string[]; category?: string; page?: number; pageSize?: number; includePersonal?: boolean } = {}) {
-    const items = await getAllPrompts(includePersonal);
+export async function fetchPrompts({ keyword = "", tag = [], category = ALL_PROMPTS_OPTION, page = 1, pageSize = 20 }: { keyword?: string; tag?: string[]; category?: string; page?: number; pageSize?: number } = {}) {
+    const items = await getAllPrompts();
     const normalizedKeyword = keyword.trim().toLowerCase();
     const normalizedPage = Math.max(1, page);
     const normalizedPageSize = Math.max(1, Math.min(100, pageSize));
     const withoutTagFilter = filterPrompts(items, { keyword: normalizedKeyword, category, tags: [] });
     const filtered = filterPrompts(items, { keyword: normalizedKeyword, category, tags: tag });
     const categories = enabledSources().map((source) => source.name);
-    if (includePersonal && usePromptStore.getState().prompts.length) categories.unshift(PERSONAL_PROMPTS_CATEGORY);
 
     return {
         items: filtered.slice((normalizedPage - 1) * normalizedPageSize, normalizedPage * normalizedPageSize),

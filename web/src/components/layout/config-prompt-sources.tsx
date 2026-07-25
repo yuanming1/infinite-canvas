@@ -45,7 +45,7 @@ export function ConfigPromptSources() {
     const handleDelete = (source: PromptSource) => {
         modal.confirm({
             title: `删除「${source.name}」？`,
-            content: "来源配置会被移除，已经保存到我的提示词的内容不受影响。",
+            content: "来源配置会被移除，已经加入我的资产的内容不受影响。",
             okText: "删除",
             okButtonProps: { danger: true },
             cancelText: "取消",

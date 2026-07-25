@@ -1,9 +1,9 @@
-import { BookmarkPlus, Copy, FileText, FolderPlus } from "lucide-react";
+import { Copy, FileText, FolderPlus } from "lucide-react";
 import { Button, Modal, Space, Tag } from "antd";
 
 import { formatPromptDate, type Prompt } from "@/services/api/prompts";
 
-export function PromptDetailDialog({ prompt, onClose, onCopy, onSaveAsset, onSavePrompt }: { prompt: Prompt | null; onClose: () => void; onCopy: (prompt: string) => void; onSaveAsset?: (prompt: Prompt) => void; onSavePrompt?: (prompt: Prompt) => void }) {
+export function PromptDetailDialog({ prompt, onClose, onCopy, onSaveAsset }: { prompt: Prompt | null; onClose: () => void; onCopy: (prompt: string) => void; onSaveAsset?: (prompt: Prompt) => void }) {
     return (
         <>
             <Modal title={prompt?.title} open={Boolean(prompt)} onCancel={onClose} footer={null} width={860}>
@@ -33,11 +33,6 @@ export function PromptDetailDialog({ prompt, onClose, onCopy, onSaveAsset, onSav
                                     {onSaveAsset ? (
                                         <Button icon={<FolderPlus className="size-4" />} onClick={() => onSaveAsset(prompt)}>
                                             加入我的资产
-                                        </Button>
-                                    ) : null}
-                                    {onSavePrompt ? (
-                                        <Button icon={<BookmarkPlus className="size-4" />} onClick={() => onSavePrompt(prompt)}>
-                                            保存到我的提示词
                                         </Button>
                                     ) : null}
                                 </Space>

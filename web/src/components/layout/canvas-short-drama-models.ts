@@ -4,24 +4,30 @@ import { useConfigStore, type ChannelModel, type ModelCapability, type ModelChan
 
 // 后端 /llm-configs/{purpose}/models 对 image/video 返回的是同一份完整模型清单（不按 purpose 过滤），
 // 因此每个 capability 必须使用独立 channel：既避免按模型名去重时把后加载的 capability 全部跳过，
-// 也保证 encodeChannelModel 编码出的 value（{channelId}::{model}）在两个下拉之间不冲突。
+// 也保证 encodeChannelModel 编码出的 value（{channelId}::{model}）在多个下拉之间不冲突。
 const SHORT_DRAMA_IMAGE_CHANNEL_ID = "short-drama-image";
 const SHORT_DRAMA_VIDEO_CHANNEL_ID = "short-drama-video";
-const SHORT_DRAMA_CHANNEL_IDS = new Set([SHORT_DRAMA_IMAGE_CHANNEL_ID, SHORT_DRAMA_VIDEO_CHANNEL_ID]);
+const SHORT_DRAMA_TEXT_CHANNEL_ID = "short-drama-text";
+const SHORT_DRAMA_CHANNEL_IDS = new Set([SHORT_DRAMA_IMAGE_CHANNEL_ID, SHORT_DRAMA_VIDEO_CHANNEL_ID, SHORT_DRAMA_TEXT_CHANNEL_ID]);
 
-// 集成模式下需要懒加载的 capability；text/audio（对应 chat 模型）暂不加载。
-function purposeOf(capability: ModelCapability): "image" | "video" | null {
+// 集成模式下需要懒加载的 capability；audio（对应 chat 模型）暂不加载。
+function purposeOf(capability: ModelCapability): "image" | "video" | "chat" | null {
     if (capability === "image") return "image";
     if (capability === "video") return "video";
+    if (capability === "text") return "chat";
     return null;
 }
 
 function shortDramaChannelId(capability: ModelCapability): string {
-    return capability === "image" ? SHORT_DRAMA_IMAGE_CHANNEL_ID : SHORT_DRAMA_VIDEO_CHANNEL_ID;
+    if (capability === "image") return SHORT_DRAMA_IMAGE_CHANNEL_ID;
+    if (capability === "text") return SHORT_DRAMA_TEXT_CHANNEL_ID;
+    return SHORT_DRAMA_VIDEO_CHANNEL_ID;
 }
 
 function shortDramaChannelName(capability: ModelCapability): string {
-    return capability === "image" ? "短剧·图像" : "短剧·视频";
+    if (capability === "image") return "短剧·图像";
+    if (capability === "text") return "短剧·文本";
+    return "短剧·视频";
 }
 
 const loaded = new Set<ModelCapability>();

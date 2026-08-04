@@ -29,6 +29,7 @@ type Props = {
     nodes: CanvasNodeData[];
     selectedNodeIds: Set<string>;
     onFocusNode: (nodeId: string) => void;
+    onPreviewNode: (nodeId: string) => void;
     onInsertAsset: (payload: InsertAssetPayload) => void;
 };
 
@@ -48,7 +49,7 @@ const STATUS_COLOR: Record<string, string> = {
     idle: "transparent",
 };
 
-export function CanvasSidePanel({ nodes, selectedNodeIds, onFocusNode, onInsertAsset }: Props) {
+export function CanvasSidePanel({ nodes, selectedNodeIds, onFocusNode, onPreviewNode, onInsertAsset }: Props) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [tab, setTab] = useState<PanelTab>("canvas");
     const width = useCanvasSidePanelStore((state) => state.width);
@@ -103,7 +104,7 @@ export function CanvasSidePanel({ nodes, selectedNodeIds, onFocusNode, onInsertA
                 </div>
                 <div className="mt-2 min-h-0 flex-1 overflow-hidden">
                     {tab === "canvas" ? (
-                        <CanvasNodesTab nodes={nodes} selectedNodeIds={selectedNodeIds} onFocusNode={onFocusNode} theme={theme} />
+                        <CanvasNodesTab nodes={nodes} selectedNodeIds={selectedNodeIds} onFocusNode={onFocusNode} onPreviewNode={onPreviewNode} theme={theme} />
                     ) : tab === "assets" ? (
                         <CanvasAssetsTab onInsert={onInsertAsset} theme={theme} />
                     ) : (
@@ -144,7 +145,7 @@ function nodePreviewText(node: CanvasNodeData) {
     return getNodeDefinition(node.type)?.title || node.type;
 }
 
-function CanvasNodesTab({ nodes, selectedNodeIds, onFocusNode, theme }: { nodes: CanvasNodeData[]; selectedNodeIds: Set<string>; onFocusNode: (nodeId: string) => void; theme: CanvasTheme }) {
+function CanvasNodesTab({ nodes, selectedNodeIds, onFocusNode, onPreviewNode, theme }: { nodes: CanvasNodeData[]; selectedNodeIds: Set<string>; onFocusNode: (nodeId: string) => void; onPreviewNode: (nodeId: string) => void; theme: CanvasTheme }) {
     const { message } = App.useApp();
     const [keyword, setKeyword] = useState("");
     const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -216,23 +217,26 @@ function CanvasNodesTab({ nodes, selectedNodeIds, onFocusNode, theme }: { nodes:
                             const isChecked = checked.has(node.id);
                             const active = selectMode ? isChecked : selectedNodeIds.has(node.id);
                             return (
-                                <button
-                                    key={node.id}
-                                    type="button"
-                                    onClick={() => (selectMode ? toggleChecked(node.id) : onFocusNode(node.id))}
-                                    className={cn("flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition", active ? "" : "hover:bg-black/5 dark:hover:bg-white/5")}
-                                    style={active ? { background: theme.toolbar.activeBg } : undefined}
-                                >
-                                    {selectMode ? <CheckMark checked={isChecked} theme={theme} /> : null}
-                                    <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-md">
-                                        {isImage ? <img src={node.metadata!.content} alt={node.title} className="size-full object-cover" /> : <Icon className="size-5 opacity-60" />}
-                                    </span>
-                                    <span className="min-w-0 flex-1 space-y-0.5">
-                                        <span className="block truncate text-sm font-medium leading-snug">{node.title || getNodeDefinition(node.type)?.title || "未命名节点"}</span>
-                                        <span className="block truncate text-xs leading-snug opacity-50">{nodePreviewText(node)}</span>
-                                    </span>
-                                    {node.metadata?.status && node.metadata.status !== "idle" ? <span className="size-1.5 shrink-0 rounded-full" style={{ background: STATUS_COLOR[node.metadata.status] || "transparent" }} /> : null}
-                                </button>
+                                <div key={node.id} className={cn("group flex w-full items-center rounded-lg transition", active ? "" : "hover:bg-black/5 dark:hover:bg-white/5")} style={active ? { background: theme.toolbar.activeBg } : undefined}>
+                                    <button type="button" onClick={() => (selectMode ? toggleChecked(node.id) : onFocusNode(node.id))} className="flex min-w-0 flex-1 items-center gap-3 px-2 py-2 text-left" title={selectMode ? undefined : "定位到节点"}>
+                                        {selectMode ? <CheckMark checked={isChecked} theme={theme} /> : null}
+                                        <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-md">
+                                            {isImage ? <img src={node.metadata!.content} alt={node.title} className="size-full object-cover" /> : <Icon className="size-5 opacity-60" />}
+                                        </span>
+                                        <span className="min-w-0 flex-1 space-y-0.5">
+                                            <span className="block truncate text-sm font-medium leading-snug">{node.title || getNodeDefinition(node.type)?.title || "未命名节点"}</span>
+                                            <span className="block truncate text-xs leading-snug opacity-50">{nodePreviewText(node)}</span>
+                                        </span>
+                                        {node.metadata?.status && node.metadata.status !== "idle" ? <span className="size-1.5 shrink-0 rounded-full" style={{ background: STATUS_COLOR[node.metadata.status] || "transparent" }} /> : null}
+                                    </button>
+                                    {selectMode || !isImage ? null : (
+                                        <div className="flex shrink-0 flex-col items-center gap-0.5 pr-1.5">
+                                            <button type="button" onClick={() => onPreviewNode(node.id)} className="grid size-7 place-items-center rounded-md opacity-55 transition hover:bg-black/10 hover:opacity-100 dark:hover:bg-white/10" aria-label="放大预览" title="放大预览">
+                                                <Eye className="size-3.5" />
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             );
                         })}
                     </div>

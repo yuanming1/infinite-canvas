@@ -1,6 +1,7 @@
 import localforage from "localforage";
 
 import i18n from "@/i18n";
+import { isShortDramaIntegration } from "@/lib/short-drama-auth";
 import { getMediaBlob, resolveMediaUrl, setMediaBlob } from "@/services/file-storage";
 import { getImageBlob, resolveImageUrl, setImageBlob } from "@/services/image-storage";
 import { downloadWebdavFile, uploadWebdavFile, WEBDAV_MANIFEST_FILE_NAME } from "@/services/webdav-sync";
@@ -81,6 +82,10 @@ const videoLogStore = localforage.createInstance({ name: "infinite-canvas", stor
 type LogStore = typeof imageLogStore;
 const storageKeyPattern = /^(image|video|audio|file|video-reference|audio-reference):/;
 
+function emptyDomainResult<T>(data: T): SyncDomainResult<T> {
+    return { data, mergedRemote: false, files: 0, manifestBytes: 0, uploadedFiles: 0, uploadedBytes: 0 };
+}
+
 export async function syncAppDataToWebdav(config: WebdavSyncConfig, onProgress?: AppSyncProgress): Promise<AppSyncResult> {
     emitProgress(onProgress, { stage: "等待本地数据加载" });
     await Promise.all([waitForHydration(useCanvasStore), waitForHydration(useAssetStore)]);
@@ -94,14 +99,17 @@ export async function syncAppDataToWebdav(config: WebdavSyncConfig, onProgress?:
             mergeData: (local, remote) => ({ projects: mergeById(local.projects, remote.projects, "updatedAt") }),
             applyData: async (data) => useCanvasStore.getState().replaceProjects(data.projects),
         }),
-        syncDomain<AssetDomainData>(config, onProgress, {
-            key: "assets",
-            label: "我的资产",
-            emptyData: { assets: [] },
-            localData: async () => ({ assets: useAssetStore.getState().assets }),
-            mergeData: (local, remote) => ({ assets: mergeById(local.assets, remote.assets, "updatedAt") }),
-            applyData: async (data) => useAssetStore.getState().replaceAssets(await Promise.all(data.assets.map(hydrateAsset))),
-        }),
+        // 集成模式：资产域由云端权威管理，不再走 WebDAV 同步（避免本地与云端双写冲突）。
+        isShortDramaIntegration
+            ? Promise.resolve(emptyDomainResult<AssetDomainData>({ assets: [] }))
+            : syncDomain<AssetDomainData>(config, onProgress, {
+                  key: "assets",
+                  label: "我的资产",
+                  emptyData: { assets: [] },
+                  localData: async () => ({ assets: useAssetStore.getState().assets }),
+                  mergeData: (local, remote) => ({ assets: mergeById(local.assets, remote.assets, "updatedAt") }),
+                  applyData: async (data) => useAssetStore.getState().replaceAssets(await Promise.all(data.assets.map(hydrateAsset))),
+              }),
         syncDomain<LogDomainData>(config, onProgress, {
             key: "image-workbench",
             label: "生图工作台",

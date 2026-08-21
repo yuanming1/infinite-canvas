@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 
 import { ClientRootInit } from "@/components/layout/client-root-init";
 import { CanvasShortDramaSync } from "@/components/layout/canvas-short-drama-sync";
+import { MediaCloudMigrationStatus } from "@/components/layout/media-cloud-migration-status";
 import { ShortDramaAuthGate } from "@/components/layout/short-drama-auth-gate";
 import type { AppLocale } from "@/i18n";
 import { getAntThemeConfig } from "@/lib/app-theme";
@@ -54,6 +55,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
                                 <ClientRootInit>{children}</ClientRootInit>
                             </QueryClientProvider>
                         </CanvasShortDramaSync>
+                        <MediaCloudMigrationStatus />
                     </ShortDramaAuthGate>
                 </App>
             </ProConfigProvider>

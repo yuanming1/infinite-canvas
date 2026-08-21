@@ -13,6 +13,7 @@ import {
 import { useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { useConfigStore, type AiConfig } from "@/stores/use-config-store";
 import { ensureShortDramaChannel } from "@/components/layout/canvas-short-drama-models";
+import { useCanvasAssetCloudSync } from "@/components/layout/canvas-asset-cloud-sync";
 
 const preferenceKeys = ["quality", "size", "background", "count", "canvasImageCount", "videoSeconds", "vquality", "videoGenerateAudio", "videoWatermark", "audioVoice", "audioFormat", "audioSpeed", "audioInstructions"] as const;
 type PreferenceKey = (typeof preferenceKeys)[number];
@@ -21,6 +22,7 @@ export function CanvasShortDramaSync({ children }: { children: ReactNode }) {
     useCanvasProjectSync();
     useCanvasPreferenceSync();
     useCanvasModelSync();
+    useCanvasAssetCloudSync();
     return <>{children}</>;
 }
 

@@ -125,6 +125,18 @@ export default {
         downloadImage: "下载图片",
         downloadVideo: "下载视频",
         downloadFailed: "下载失败，请稍后重试",
+        cloudSync: {
+            loadFailed: "云端资产加载失败",
+            saveFailed: "资产同步到云端失败",
+            uploadTooLarge: "图片不能超过 50MiB，视频不能超过 200MB",
+            uploadFailed: "上传失败，请检查网络后重试",
+        },
+    },
+    migration: {
+        title: "正在迁移本地素材到云端",
+        progress: "已上传 {{uploaded}} / {{total}} 个文件",
+        failed: "本地素材迁移失败",
+        retry: "重试",
     },
     notFound: {
         title: "页面不存在",

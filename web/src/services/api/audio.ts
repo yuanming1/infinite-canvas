@@ -2,7 +2,9 @@ import axios from "axios";
 
 import i18n from "@/i18n";
 import { audioMimeType, normalizeAudioFormatValue, normalizeAudioSpeedValue, normalizeAudioVoiceValue } from "@/lib/audio-generation";
+import { isShortDramaIntegration } from "@/lib/short-drama-auth";
 import { uploadMediaFile, type UploadedFile } from "@/services/file-storage";
+import { generateCanvasAudio } from "@/services/short-drama-canvas";
 import { buildApiUrl, resolveModelRequestConfig, resolveModelScript, withLocalProxy, type AiConfig } from "@/stores/use-config-store";
 import { runModelPlugin } from "./model-plugin";
 
@@ -24,6 +26,17 @@ export async function requestAudioGeneration(config: AiConfig, prompt: string, o
     const requestConfig = resolveModelRequestConfig(config, config.model || config.audioModel);
     const model = requestConfig.model.trim();
     const format = normalizeAudioFormatValue(config.audioFormat);
+    if (isShortDramaIntegration) {
+        return generateCanvasAudio({
+            input: prompt,
+            model,
+            options: {
+                voice: normalizeAudioVoiceValue(config.audioVoice),
+                response_format: format,
+                speed: Number(normalizeAudioSpeedValue(config.audioSpeed)),
+            },
+        });
+    }
     const script = resolveModelScript(config, config.model || config.audioModel);
     if (script) {
         if (!model) throw new Error(apiText("audioModelRequired"));

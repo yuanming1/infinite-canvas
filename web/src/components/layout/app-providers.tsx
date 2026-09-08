@@ -10,6 +10,9 @@ import "dayjs/locale/zh-cn";
 import { useTranslation } from "react-i18next";
 
 import { ClientRootInit } from "@/components/layout/client-root-init";
+import { CanvasShortDramaSync } from "@/components/layout/canvas-short-drama-sync";
+import { MediaCloudMigrationStatus } from "@/components/layout/media-cloud-migration-status";
+import { ShortDramaAuthGate } from "@/components/layout/short-drama-auth-gate";
 import type { AppLocale } from "@/i18n";
 import { getAntThemeConfig } from "@/lib/app-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -46,9 +49,14 @@ export function AppProviders({ children }: { children: ReactNode }) {
         <ConfigProvider locale={locale === "zh-CN" ? zhCN : enUS} theme={getAntThemeConfig(dark)}>
             <ProConfigProvider dark={dark}>
                 <App>
-                    <QueryClientProvider client={queryClient}>
-                        <ClientRootInit>{children}</ClientRootInit>
-                    </QueryClientProvider>
+                    <ShortDramaAuthGate>
+                        <CanvasShortDramaSync>
+                            <QueryClientProvider client={queryClient}>
+                                <ClientRootInit>{children}</ClientRootInit>
+                            </QueryClientProvider>
+                        </CanvasShortDramaSync>
+                        <MediaCloudMigrationStatus />
+                    </ShortDramaAuthGate>
                 </App>
             </ProConfigProvider>
         </ConfigProvider>

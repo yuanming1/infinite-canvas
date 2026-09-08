@@ -125,6 +125,18 @@ export default {
         downloadImage: "Download image",
         downloadVideo: "Download video",
         downloadFailed: "Download failed. Please try again.",
+        cloudSync: {
+            loadFailed: "Failed to load cloud assets",
+            saveFailed: "Failed to sync asset to cloud",
+            uploadTooLarge: "Images must be under 50MiB, videos under 200MB",
+            uploadFailed: "Upload failed, please check your network and retry",
+        },
+    },
+    migration: {
+        title: "Migrating local media to cloud",
+        progress: "Uploaded {{uploaded}} / {{total}} files",
+        failed: "Local media migration failed",
+        retry: "Retry",
     },
     notFound: {
         title: "Page not found",

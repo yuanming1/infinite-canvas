@@ -25,6 +25,7 @@ export function AppTopNav() {
     const hideHeader = /^\/canvas\/[^/]+/.test(pathname);
     const slug = pathname.split("/").filter(Boolean)[0];
     const activeToolSlug = navigationTools.some((tool) => tool.slug === slug) ? (slug as NavigationToolSlug) : undefined;
+    const logoUrl = `${import.meta.env.BASE_URL}logo.svg`;
 
     useEffect(() => {
         if (autoConnectRef.current || agentEnabled || agentConnected || !agentToken.trim()) return;
@@ -42,8 +43,8 @@ export function AppTopNav() {
                                 <span
                                     className="size-5 shrink-0 bg-current"
                                     style={{
-                                        mask: "url(/logo.svg) center / contain no-repeat",
-                                        WebkitMask: "url(/logo.svg) center / contain no-repeat",
+                                        mask: `url(${logoUrl}) center / contain no-repeat`,
+                                        WebkitMask: `url(${logoUrl}) center / contain no-repeat`,
                                     }}
                                 />
                                 <span className="text-base font-medium">{t("meta.title")}</span>

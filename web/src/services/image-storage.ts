@@ -3,6 +3,8 @@ import localforage from "localforage";
 import { nanoid } from "nanoid";
 import i18n from "@/i18n";
 import { withLocalProxy } from "@/stores/use-config-store";
+import { isShortDramaIntegration } from "@/lib/short-drama-auth";
+import { uploadCanvasMedia } from "@/services/short-drama-media";
 
 export type UploadedImage = {
     url: string;
@@ -25,6 +27,13 @@ const IMAGE_TIMEOUT_ERROR = "ImageTimeoutError";
 
 type ImageReadOptions = { signal?: AbortSignal };
 
+// 集成模式：云端 storageKey(cloud:{uuid}) -> 持久 https URL 的会话内缓存（跨会话由 fallback URL 兜底）。
+const remoteUrls = new Map<string, string>();
+
+export function isCloudStorageKey(storageKey?: string) {
+    return !!storageKey && storageKey.startsWith("cloud:");
+}
+
 export async function uploadImage(input: string | Blob, options?: ImageReadOptions): Promise<UploadedImage> {
     if (typeof input !== "string") return storeImage(input, options);
 
@@ -41,6 +50,26 @@ export async function uploadImage(input: string | Blob, options?: ImageReadOptio
 }
 
 async function storeImage(blob: Blob, options?: ImageReadOptions): Promise<UploadedImage> {
+    if (isShortDramaIntegration) {
+        const tempUrl = URL.createObjectURL(blob);
+        try {
+            const meta = await loadImageMeta(tempUrl, options);
+            if (!meta) throw new Error(i18n.t("common.imageReadFailed"));
+            throwIfAborted(options?.signal);
+            const uploaded = await uploadCanvasMedia(blob, "image", { width: meta.width, height: meta.height });
+            remoteUrls.set(uploaded.storage_key, uploaded.url);
+            return {
+                url: uploaded.url,
+                storageKey: uploaded.storage_key,
+                width: uploaded.width ?? meta.width,
+                height: uploaded.height ?? meta.height,
+                bytes: uploaded.bytes,
+                mimeType: uploaded.mime_type || blob.type || "image/png",
+            };
+        } finally {
+            URL.revokeObjectURL(tempUrl);
+        }
+    }
     const storageKey = `image:${nanoid()}`;
     const url = URL.createObjectURL(blob);
     try {
@@ -132,6 +161,7 @@ function throwIfAborted(signal?: AbortSignal) {
 
 export async function resolveImageUrl(storageKey?: string, fallback = "") {
     if (!storageKey) return fallback;
+    if (isCloudStorageKey(storageKey)) return remoteUrls.get(storageKey) ?? fallback;
     const cached = objectUrls.get(storageKey);
     if (cached) return cached;
     const blob = await store.getItem<Blob>(storageKey);
@@ -141,7 +171,20 @@ export async function resolveImageUrl(storageKey?: string, fallback = "") {
     return url;
 }
 
+export function rememberCloudImageUrl(storageKey: string, url: string) {
+    if (isCloudStorageKey(storageKey) && url && !url.startsWith("blob:")) remoteUrls.set(storageKey, url);
+}
+
 export async function getImageBlob(storageKey: string) {
+    if (isCloudStorageKey(storageKey)) {
+        const url = remoteUrls.get(storageKey);
+        if (!url) return null;
+        try {
+            return await (await fetch(url)).blob();
+        } catch {
+            return null;
+        }
+    }
     return store.getItem<Blob>(storageKey);
 }
 
@@ -159,8 +202,10 @@ export async function imageToDataUrl(image: { url?: string; dataUrl?: string; st
 }
 
 export async function deleteStoredImages(keys: Iterable<string>) {
+    const localKeys = Array.from(new Set(keys)).filter((key) => !isCloudStorageKey(key));
+    if (isShortDramaIntegration && localKeys.length === 0) return;
     await Promise.all(
-        Array.from(new Set(keys)).map(async (key) => {
+        localKeys.map(async (key) => {
             const url = objectUrls.get(key);
             if (url) URL.revokeObjectURL(url);
             objectUrls.delete(key);
@@ -170,6 +215,8 @@ export async function deleteStoredImages(keys: Iterable<string>) {
 }
 
 export async function cleanupUnusedImages(usedData: unknown) {
+    // 集成模式云端媒体由服务端引用判定与 GC 管理，本地不做清理。
+    if (isShortDramaIntegration) return;
     const usedKeys = collectImageStorageKeys(usedData);
     await Promise.all([
         imageLogStore.iterate((value) => {

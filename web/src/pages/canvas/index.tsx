@@ -10,10 +10,23 @@ import { setImageBlob } from "@/services/image-storage";
 import { CanvasDeleteProjectsDialog } from "@/components/canvas/canvas-delete-projects-dialog";
 import { CanvasProjectCard } from "@/components/canvas/canvas-project-card";
 import type { CanvasExportFile } from "@/types/canvas-export";
-import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
+import { useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { useCanvasUiStore } from "@/stores/canvas/use-canvas-ui-store";
 import { exportCanvasProjects } from "@/lib/canvas/canvas-export";
 import { hasAgentUrlBootstrap } from "@/lib/agent/agent-url-bootstrap";
+
+function restoreImportedProjectMedia(project: CanvasProject, urls: Map<string, string>): CanvasProject {
+    return {
+        ...project,
+        nodes: project.nodes.map((node) => {
+            const metadata = node.metadata;
+            if (!metadata) return node;
+            const content = metadata.storageKey ? urls.get(metadata.storageKey) || metadata.content : metadata.content;
+            const images = metadata.images?.map((image) => (image.storageKey ? { ...image, content: urls.get(image.storageKey) || image.content } : image));
+            return { ...node, metadata: { ...metadata, content, ...(images ? { images } : {}) } };
+        }),
+    };
+}
 
 export default function CanvasPage() {
     const { message } = App.useApp();
@@ -44,17 +57,19 @@ export default function CanvasPage() {
             const projectFile = zip.get("projects.json");
             if (!projectFile) throw new Error("missing projects.json");
             const data = JSON.parse(await projectFile.text()) as CanvasExportFile;
+            const urls = new Map<string, string>();
             await Promise.all(
                 data.projects.flatMap((project) =>
                     project.files.map(async (item) => {
                         const blob = zip.get(item.path);
                         if (!blob) return;
                         const typedBlob = blob.type ? blob : blob.slice(0, blob.size, item.mimeType);
-                        await (item.storageKey.startsWith("image:") ? setImageBlob(item.storageKey, typedBlob) : setMediaBlob(item.storageKey, typedBlob));
+                        const url = await (item.storageKey.startsWith("image:") ? setImageBlob(item.storageKey, typedBlob) : setMediaBlob(item.storageKey, typedBlob));
+                        urls.set(item.storageKey, url);
                     }),
                 ),
             );
-            data.projects.forEach((item) => importProject(item.project));
+            data.projects.forEach((item) => importProject(restoreImportedProjectMedia(item.project, urls)));
             message.success(t("canvas.imported", { count: data.projects.length }));
         } catch {
             message.error(t("canvas.importFailed"));

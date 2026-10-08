@@ -6,6 +6,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
 import { pickImageSource } from "@/lib/image-thumbnail";
 import { previewUrlFor, subscribeImagePreviews, getImagePreviewRevision } from "@/services/image-storage";
+import { resolveMediaUrl } from "@/services/file-storage";
 import { getNodeDefinition } from "@/lib/canvas/node-registry";
 import { buildNodeContext } from "@/lib/canvas/plugin-node-context";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -367,6 +368,10 @@ export const CanvasNode = React.memo(function CanvasNode({
                     boxShadow: isGroupDropTarget ? `0 0 0 2px ${selectionBlue}66, inset 0 0 0 999px ${selectionBlue}10` : isActive ? `0 0 0 1px ${selectionBlue}55` : isRelated ? `0 0 0 1px ${theme.node.muted}55, 0 18px 48px rgba(0,0,0,.14)` : undefined,
                 }}
                 onMouseDown={(event) => {
+                    if (event.target instanceof Element && event.target.closest("[data-canvas-media]")) {
+                        event.stopPropagation();
+                        return;
+                    }
                     if (!referenceSelectionState) onMouseDown(event, data.id);
                     else if (event.button === 0 && referenceSelectionState === "available") {
                         event.stopPropagation();
@@ -701,6 +706,33 @@ function EmptyImageContent({ theme }: NodeContentRendererProps) {
 
 function VideoNodeContent({ node, theme }: NodeContentRendererProps) {
     const { t } = useTranslation();
+    const content = node.metadata?.content || "";
+    const storageKey = node.metadata?.storageKey;
+    const [source, setSource] = useState(() => (storageKey ? "" : content));
+
+    useEffect(() => {
+        let disposed = false;
+        if (!content) {
+            setSource("");
+            return;
+        }
+        if (!storageKey) {
+            setSource(content);
+            return;
+        }
+        setSource("");
+        void resolveMediaUrl(storageKey, content)
+            .then((url) => {
+                if (!disposed) setSource(url);
+            })
+            .catch(() => {
+                if (!disposed) setSource(content);
+            });
+        return () => {
+            disposed = true;
+        };
+    }, [content, storageKey]);
+
     if (!node.metadata?.content)
         return (
             <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.placeholder }}>
@@ -708,7 +740,18 @@ function VideoNodeContent({ node, theme }: NodeContentRendererProps) {
                 <span className="text-sm">{t("canvas.node.emptyVideo")}</span>
             </div>
         );
-    return <video src={node.metadata.content} controls className="h-full w-full rounded-[18px] bg-black object-contain" data-canvas-video={node.id} data-canvas-no-zoom />;
+    return (
+        <video
+            src={source || undefined}
+            controls
+            className="h-full w-full rounded-[18px] bg-black object-contain"
+            data-canvas-video={node.id}
+            data-canvas-media
+            data-canvas-no-zoom
+            onMouseDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+        />
+    );
 }
 
 function AudioNodeContent({ node, theme }: NodeContentRendererProps) {
@@ -726,7 +769,7 @@ function AudioNodeContent({ node, theme }: NodeContentRendererProps) {
                 <Music2 className="size-4 shrink-0" />
                 <span className="truncate">{t("canvas.node.audio")}</span>
             </div>
-            <audio src={node.metadata.content} controls className="w-full" data-canvas-no-zoom />
+            <audio src={node.metadata.content} controls className="w-full" data-canvas-media data-canvas-no-zoom />
         </div>
     );
 }

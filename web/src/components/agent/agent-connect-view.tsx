@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 
+const AGENT_PLUGIN_INSTALL_COMMAND = "git clone https://github.com/basketikun/infinite-canvas.git; cd infinite-canvas; codex plugin marketplace add .; codex plugin add infinite-canvas@infinite-canvas-local";
 const AGENT_PLUGIN_REMOVE_COMMAND = "codex plugin remove infinite-canvas";
 const AGENT_MCP_REMOVE_COMMAND = "codex mcp remove infinite-canvas";
 
@@ -49,6 +50,7 @@ export function AgentConnectView({
             <div className="mt-1">{t("agent.connect.pluginReminderText")}</div>
             <div className="mt-2 grid gap-1.5">
                 {[
+                    [t("agent.connect.installPlugin"), AGENT_PLUGIN_INSTALL_COMMAND],
                     [t("agent.connect.removePlugin"), AGENT_PLUGIN_REMOVE_COMMAND],
                     [t("agent.connect.removeMcp"), AGENT_MCP_REMOVE_COMMAND],
                 ].map(([label, command]) => (

@@ -2982,6 +2982,67 @@ function InfiniteCanvasPage() {
         [completeVideoNodeTask, effectiveConfig, finishGenerationRequest, isAiConfigReady, message, openConfigDialog, pollVideoNodeTask, startGenerationRequest, t],
     );
 
+    const handleRegenerateNode = useCallback(
+        async (node: CanvasNodeData) => {
+            const prompt = node.metadata?.prompt?.trim();
+            if (!prompt) {
+                message.warning(t("canvas.projectPage.retryPromptMissing"));
+                return;
+            }
+            // 重新生成走分支：克隆原节点的生成配方（提示词、参考、模型参数）并复制上游连线，结果写入右侧新节点，原节点保留。
+            const branchId = nanoid();
+            const branch: CanvasNodeData = {
+                ...node,
+                id: branchId,
+                position: { x: node.position.x + node.width + 96, y: node.position.y },
+                metadata: {
+                    ...node.metadata,
+                    content: undefined,
+                    storageKey: undefined,
+                    images: undefined,
+                    primaryImageId: undefined,
+                    videoTaskId: undefined,
+                    naturalWidth: undefined,
+                    naturalHeight: undefined,
+                    bytes: undefined,
+                    durationMs: undefined,
+                    mimeType: undefined,
+                    status: NODE_STATUS_LOADING,
+                    errorDetails: undefined,
+                    regeneratedFrom: node.id,
+                },
+            };
+            const nextConnections = [...connectionsRef.current, ...connectionsRef.current.filter((connection) => connection.toNodeId === node.id).map((connection) => ({ id: nanoid(), fromNodeId: connection.fromNodeId, toNodeId: branchId }))];
+            connectionsRef.current = nextConnections;
+            setConnections(nextConnections);
+            setNodes((prev) => [...prev, branch]);
+            await handleRetryNode(branch);
+        },
+        [handleRetryNode, message, t],
+    );
+
+    const handleReplaceOriginalNode = useCallback(
+        (node: CanvasNodeData) => {
+            const sourceId = node.metadata?.regeneratedFrom;
+            const source = sourceId ? nodesRef.current.find((item) => item.id === sourceId) : undefined;
+            if (!sourceId || !source) {
+                message.warning(t("canvas.projectPage.replaceOriginalMissing"));
+                return;
+            }
+            // 用分支结果替换原节点：原节点保留位置、标题与全部连线，内容与尺寸换成分支的结果，分支节点随之删除。
+            setNodes((prev) =>
+                prev
+                    .filter((item) => item.id !== node.id)
+                    .map((item) => (item.id === sourceId ? { ...node, id: sourceId, position: item.position, title: item.title, metadata: { ...node.metadata, groupId: item.metadata?.groupId, regeneratedFrom: undefined } } : item)),
+            );
+            setConnections((prev) => prev.filter((connection) => connection.fromNodeId !== node.id && connection.toNodeId !== node.id));
+            setSelectedNodeIds(new Set([sourceId]));
+            setSelectedConnectionId(null);
+            setDialogNodeId((current) => (current === node.id ? sourceId : current));
+        },
+        [message, t],
+    );
+
     const deleteBatchImage = useCallback((nodeId: string, imageId: string) => {
         const node = nodesRef.current.find((item) => item.id === nodeId);
         if ((node?.metadata?.images?.length || 0) <= 2) setExpandedBatchNodeIds((current) => new Set([...current].filter((id) => id !== nodeId)));
@@ -3385,6 +3446,9 @@ function InfiniteCanvasPage() {
                     onViewImage={handleNodeViewImage}
                     onReversePrompt={createImageReversePromptNodes}
                     onRetry={(node) => void handleRetryNode(node)}
+                    onRegenerate={(node) => void handleRegenerateNode(node)}
+                    canReplaceOriginal={(node) => Boolean(node.metadata?.regeneratedFrom && node.metadata?.content && nodes.some((item) => item.id === node.metadata?.regeneratedFrom))}
+                    onReplaceOriginal={handleReplaceOriginalNode}
                     onToggleFreeResize={(node) => toggleNodeFreeResize(node.id)}
                     onDelete={(node) => deleteNodes(new Set([node.id]))}
                     onUngroup={(node) => ungroupSelection(new Set([node.id]))}

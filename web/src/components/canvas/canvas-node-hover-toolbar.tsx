@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { App, Modal, Segmented, Tooltip } from "antd";
-import { Download, Ellipsis, FolderPlus, Image as ImageIcon, Info, MessageSquare, Minus, Music2, Plus, RefreshCw, Settings2, Trash2, Ungroup, Upload, Video } from "lucide-react";
+import { Download, Ellipsis, FolderPlus, Image as ImageIcon, Info, MessageSquare, Minus, Music2, Plus, RefreshCw, Repeat, Replace, Settings2, Trash2, Ungroup, Upload, Video } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -35,6 +35,9 @@ type CanvasNodeHoverToolbarProps = {
     onViewImage: (node: CanvasNodeData) => void;
     onReversePrompt: (node: CanvasNodeData) => void;
     onRetry: (node: CanvasNodeData) => void;
+    onRegenerate: (node: CanvasNodeData) => void;
+    canReplaceOriginal: (node: CanvasNodeData) => boolean;
+    onReplaceOriginal: (node: CanvasNodeData) => void;
     onToggleFreeResize: (node: CanvasNodeData) => void;
     onDelete: (node: CanvasNodeData) => void;
     onUngroup?: (node: CanvasNodeData) => void;
@@ -73,6 +76,9 @@ export function CanvasNodeHoverToolbar({
     onViewImage,
     onReversePrompt,
     onRetry,
+    onRegenerate,
+    canReplaceOriginal,
+    onReplaceOriginal,
     onToggleFreeResize,
     onDelete,
     onUngroup,
@@ -118,6 +124,8 @@ export function CanvasNodeHoverToolbar({
     const isText = node.type === CanvasNodeType.Text;
     const isConfig = node.type === CanvasNodeType.Config;
     const canRetry = node.metadata?.status === "error" && !(isVideo && Boolean(node.metadata?.videoTaskId) && !hasVideo);
+    // 已有内容的图片/视频节点可按原配方重新生成为一个新的分支节点，原节点保留。
+    const canRegenerate = (hasImage || hasVideo) && Boolean(node.metadata?.prompt?.trim()) && node.metadata?.status !== "loading";
     const canQueryVideoTask = isVideo && Boolean(node.metadata?.videoTaskId) && !hasVideo && node.metadata?.status !== "loading";
     const quickImageToolIdSet = new Set(quickImageToolIds);
     const copyImagePrompt = (target: CanvasNodeData) => {
@@ -194,6 +202,8 @@ export function CanvasNodeHoverToolbar({
                 onMouseDown={(event) => event.stopPropagation()}
                 onPointerDown={(event) => event.stopPropagation()}
             >
+                {canRegenerate ? <ToolbarAction id="regenerate" title={t("canvas.nodeToolbar.regenerateTitle")} label={t("canvas.nodeToolbar.regenerate")} icon={<Repeat className="size-4" />} onClick={() => onRegenerate(node)} showLabel={isImage ? showImageToolLabels : true} /> : null}
+                {canReplaceOriginal(node) ? <ToolbarAction id="replaceOriginal" title={t("canvas.nodeToolbar.replaceOriginalTitle")} label={t("canvas.nodeToolbar.replaceOriginal")} icon={<Replace className="size-4" />} onClick={() => onReplaceOriginal(node)} showLabel={isImage ? showImageToolLabels : true} /> : null}
                 {toolbarTools.map((tool) => (
                     <ToolbarAction key={tool.id} {...tool} showLabel={isImage ? showImageToolLabels : true} />
                 ))}

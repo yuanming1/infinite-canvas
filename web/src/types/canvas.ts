@@ -84,6 +84,7 @@ export type CanvasNodeMetadata = {
     videoTaskId?: string;
     videoTaskProvider?: "openai" | "gemini" | "doubao";
     groupId?: string;
+    regeneratedFrom?: string; // 重新生成分支记录其来源节点，供「替换原节点」使用。
     interactive?: boolean; // Plugin node interaction/move state; see CanvasNodeDefinition.interactionToggle.
 };
 
